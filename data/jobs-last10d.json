@@ -1,0 +1,9 @@
+{
+  "generatedAt": "1970-01-01T00:00:00Z",
+  "windowDays": 10,
+  "source": "Workforce Australia (official)",
+  "countsByPostcode": {
+    "6000": 0,
+    "6001": 0
+  }
+}
