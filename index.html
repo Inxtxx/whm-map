@@ -3,258 +3,153 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>澳大利亚打工度假集签地图（邮编边界版）</title>
-
-<!-- Leaflet 与 PapaParse（CDN） -->
+<title>WHM 集签地图 · 官方岗位热度（近10天）</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-
 <style>
   html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,"PingFang SC","Microsoft YaHei",sans-serif;}
   #map{width:100%;height:100%;}
   .panel{position:absolute;z-index:1000;background:rgba(255,255,255,.96);padding:10px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.2);max-width:360px}
-  .legend{position:absolute;z-index:1000;left:10px;bottom:10px;background:#fff;padding:10px;border-radius:6px;box-shadow:0 1px 6px rgba(0,0,0,.18);font-size:13px;line-height:1.5}
-  .legend .row{display:flex;align-items:center;margin:2px 0}
-  .swatch{width:16px;height:16px;margin-right:8px;border-radius:3px;display:inline-block;border:1px solid #9992}
-  .btn{display:inline-block;background:#1976d2;color:#fff!important;text-decoration:none;padding:6px 10px;border-radius:4px;font-size:14px;margin:3px 4px 0 0}
-  .btn:hover{background:#0d47a1}
-  .pill{display:inline-block;background:#eee;border-radius:999px;padding:2px 8px;margin:2px 6px 0 0;font-size:12px}
   .tools{top:10px;left:10px}
   .jobs{top:10px;right:10px}
+  .pill{display:inline-block;background:#eef1f6;border-radius:999px;padding:2px 8px;margin:2px 6px 0 0;font-size:12px}
+  .legend{position:absolute;z-index:1000;left:10px;bottom:10px;background:#fff;padding:10px;border-radius:6px;box-shadow:0 1px 6px rgba(0,0,0,.18);font-size:13px;line-height:1.5}
+  .swatch{width:16px;height:16px;margin-right:8px;border-radius:3px;display:inline-block;border:1px solid #9992}
   .note{font-size:12px;color:#555;margin-top:6px}
 </style>
 </head>
 <body>
 <div id="map"></div>
 
-<!-- 左上：筛选与说明 -->
-<div class="panel tools" id="tools">
+<div class="panel tools">
   <div style="font-weight:600;margin-bottom:4px;">显示选项</div>
   <label><input type="checkbox" id="toggleEligibleOnly" /> 只看可集签</label><br/>
   <label><input type="checkbox" id="toggleCapitals" checked /> 高亮首府（多为不可计入）</label>
-  <div class="note">鼠标移入多边形可查看：邮编 + 行业；点击可固定并在右侧拓展“找到工作”。</div>
+  <div class="note">蓝色深浅=Workforce Australia 近10天岗位数量；灰+红虚线=不可集签。</div>
 </div>
 
-<!-- 右上：找到工作（多站一键搜，近10天） -->
 <div class="panel jobs" id="jobs" style="display:none;">
-  <div style="font-weight:600;margin-bottom:6px;">找到工作</div>
-  <div id="jobsTitle" style="margin-bottom:6px;"></div>
-  <div id="jobBtns"></div>
-  <div class="note">默认跳到 Google 的“站内搜索 + 近10天”结果页（各站自身过滤更稳）。</div>
+  <div id="jobsTitle" style="font-weight:600;margin-bottom:6px;"></div>
+  <div id="jobsMeta" style="margin-bottom:8px;"></div>
+  <div><a id="wfLink" href="#" target="_blank" rel="noopener">在 Workforce Australia 打开检索</a></div>
+  <div class="note">岗位来源：Workforce Australia（政府官方）。</div>
 </div>
 
-<!-- 左下：图例 -->
-<div class="legend" id="legend">
-  <div style="font-weight:600;margin-bottom:4px;">行业数量着色</div>
-  <div class="row"><span class="swatch" style="background:hsl(140,60%,78%)"></span>1 个行业（仅旅游酒店/或区域单一）</div>
-  <div class="row"><span class="swatch" style="background:hsl(140,60%,66%)"></span>2–3 个行业</div>
-  <div class="row"><span class="swatch" style="background:hsl(140,60%,54%)"></span>4–5 个行业（最深色）</div>
+<div class="legend">
+  <div style="font-weight:600;margin-bottom:4px;">蓝色=近10天岗位数</div>
+  <div><span class="swatch" style="background:#eef5ff;border-color:#cbd6f1"></span>0</div>
+  <div><span class="swatch" style="background:#cfe1ff;border-color:#98b7f3"></span>1–5</div>
+  <div><span class="swatch" style="background:#9fc2ff;border-color:#6d9ef1"></span>6–20</div>
+  <div><span class="swatch" style="background:#6aa0ff;border-color:#447fe6"></span>21–50</div>
+  <div><span class="swatch" style="background:#2f6bff;border-color:#1d4ed8"></span>51–100</div>
+  <div><span class="swatch" style="background:#0f3bb3;border-color:#0b2a80"></span>100+</div>
   <div style="margin:6px 0;border-top:1px dashed #ccc"></div>
-  <div class="row"><span class="swatch" style="background:#f2f3f5;border:1px dashed #ff4d4f"></span><span style="color:#c0392b">不可集签（醒目灰+红虚线）</span></div>
-  <div class="note">边界为 ABS Postal Areas（POA，邮政区近似边界）。</div>
+  <div><span class="swatch" style="background:#f2f3f5;border:1px dashed #ff4d4f"></span><span style="color:#c0392b">不可集签</span></div>
+  <div class="note">邮编边界：ABS POA 2021（邮政区近似）。</div>
 </div>
 
 <script>
-/* ---------------------- 1) 集签规则（官方口径） ---------------------- */
-// 远/极远与北部地区：旅游与酒店业
-const INDUSTRIES_REMOTE = ['旅游和酒店业'];
-// Regional：5 类行业
-const INDUSTRIES_REGIONAL = ['植畜与动物种植','渔业和珍珠养殖','树木种植与伐木','矿业','建筑业'];
-
-// 邮编范围：用“['2000','2001-2009']”形式；'*' 表示全州通配
-function expand(rangeStr){rangeStr=String(rangeStr||'').trim();if(!rangeStr)return[];if(rangeStr.includes('-')){const[a,b]=rangeStr.split('-').map(x=>parseInt(x,10));const out=[];for(let i=a;i<=b;i++)out.push(String(i).padStart(4,'0'));return out}return[String(rangeStr).padStart(4,'0')]}
-function expandList(list){const out=[];(list||[]).forEach(r=>out.push(...expand(r)));return out}
-function inRanges(list, pc){pc=String(pc).padStart(4,'0');return (list||[]).some(r=>{if(String(r).trim()==='*')return true;if(String(r).includes('-')){const[a,b]=r.split('-').map(x=>parseInt(x,10));const n=parseInt(pc,10);return n>=a && n<=b}return pc===String(r).padStart(4,'0')})}
-
-// 依据移民局列举范围（节选+整理：与之前版本一致）
-const ELIGIBLE = {
-  remote:{ // 旅游与酒店（含 remote/very remote）
-    NSW:['2356','2386','2387','2396','2405','2406','2672','2675','2825','2826','2829','2832-2836','2838-2840','2873','2878','2879','2898','2899'],
-    NT:['*'],
-    QLD:['4025','4183','4417-4420','4422','4423','4426-4428','4454','4461','4462','4465','4467','4468','4470','4474','4475','4477-4482','4486-4494','4496','4497','4680','4694','4695','4697','4699-4707','4709-4714','4717','4720-4728','4730-4733','4735-4746','4750','4751','4753','4754','4756','4757','4798-4812','4814-4825','4828-4830','4849','4850','4852','4854-4856','4858-4861','4865','4868-4888','4890-4892','4895'],
-    VIC:['3424','3506','3509','3512','3889-3892'],
-    SA:['5220-5223','5302-5304','5440','5576','5577','5582','5583','5602-5607','5611','5630-5633','5640-5642','5650-5655','5660','5661','5670','5671','5680','5690','5713','5715','5717','5719','5720','5722-5725','5730-5734'],
-    TAS:['7139','7255-7257','7466-7470'],
-    WA:['6161','6335-6338','6341','6343','6346','6348','6350-6353','6355-6359','6361','6363','6365','6367-6369','6373','6375','6385','6386','6418-6429','6431','6434','6436-6438','6440','6443','6445-6448','6450','6452','6466-6468','6470','6472','6473','6475-6477','6479','6480','6484','6487-6490','6515','6517-6519','6536','6605','6606','6608','6609','6612-6614','6616','6620','6623','6625','6627','6628','6630-6632','6635','6638-6640','6731','6733','6798','6799']
-  },
-  remoteExtra:{QLD:['4406','4416','4498'],TAS:['7215']}, // 额外 QLD/TAS 远区邮编
-  northern:{ // “北部澳大利亚” 旅游与酒店
-    NT:['*'],
-    QLD:['4472','4478','4481','4482','4680','4694','4695','4697','4699-4707','4709-4714','4717','4720-4728','4730-4733','4735-4746','4750','4751','4753','4754','4756','4757','4798-4812','4814-4825','4828-4830','4849','4850','4852','4854-4856','4858-4861','4865','4868-4888','4890-4892','4895'],
-    WA:['0872','6537','6642','6646','6701','6705','6707','6710-6714','6716','6718','6720-6722','6725','6726','6728','6740','6743','6751','6753','6754','6758','6760','6762','6765','6770']
-  },
-  regional:{ // 5类行业
-    NSW:['2311-2312','2328-2411','2420-2490','2536-2551','2575-2594','2618-2739','2787-2898'],
-    VIC:['3139','3211-3334','3340-3424','3430-3649','3658-3749','3753','3756','3758','3762','3764','3778-3781','3783','3797','3799','3810-3909','3921-3925','3945-3974','3979','3981-3996'],
-    QLD:['4124-4125','4133','4211','4270-4272','4275','4280','4285','4287','4307-4499','4510','4512','4515-4519','4522-4899'],
-    SA:['*'],TAS:['*'],NT:['*'],
-    WA:['6041-6044','6055-6056','6069','6076','6083-6084','6111','6121-6126','6200-6799'],
-    Norfolk:['*']
-  }
-};
-
-// 根据邮编首位估算州（满足 SA/TAS/NT 的全州通配）
-function stateByPostcode(pc){
-  pc=String(pc).padStart(4,'0');
-  const p=pc[0];
-  if(p==='2') return 'NSW'; // 含 ACT（我们并入 NSW 规则处理）
-  if(p==='3') return 'VIC';
-  if(p==='4') return 'QLD';
-  if(p==='5') return 'SA';
-  if(p==='6') return 'WA';
-  if(p==='7') return 'TAS';
-  if(p==='0' || p==='8') return 'NT'; // NT 邮编 08xx（历史上也常写 08xx/09xx）
-  return 'Other';
+// —— 1) 颜色映射（统一蓝色）——
+function blueRamp(n){
+  if(n<=0) return '#eef5ff';
+  if(n<=5) return '#cfe1ff';
+  if(n<=20) return '#9fc2ff';
+  if(n<=50) return '#6aa0ff';
+  if(n<=100) return '#2f6bff';
+  return '#0f3bb3';
 }
+const STYLE_INELIG = { fillColor:'#f2f3f5', color:'#ff4d4f', weight:1, dashArray:'4 2', fillOpacity:.5 };
 
-// 计算某邮编可集签行业集合（远/北部 + regional）
-function industriesFor(pc){
-  const st=stateByPostcode(pc);
-  let inds=[];
-  // remote + extra + northern => 旅游酒店
-  if (inRanges(ELIGIBLE.remote[st], pc) || inRanges(ELIGIBLE.remoteExtra[st], pc) || inRanges(ELIGIBLE.northern[st], pc)){
-    inds = inds.concat(INDUSTRIES_REMOTE);
-  }
-  // regional（含通配全州）
-  const r = ELIGIBLE.regional[st];
-  const matchRegional = Array.isArray(r) && (r.includes('*') || inRanges(r, pc));
-  if (matchRegional){
-    inds = inds.concat(INDUSTRIES_REGIONAL);
-  }
-  // 去重
-  return [...new Set(inds)];
-}
-
-/* ---------------------- 2) 地图与数据源 ---------------------- */
-// POA（邮编边界）GeoJSON（从 GitHub 镜像的简化版，多边形 ~12MB）
+// —— 2) 载入规则与数据 —— 
 const POA_GEOJSON_URL = 'https://cdn.jsdelivr.net/gh/ferocia/australia-geojsons@master/outputs/au-postcodes-Visvalingam-5.geojson';
-// 备用：若你把 GeoJSON 放进仓库根目录，改成 '/poa-2021.geojson' 即可；或使用 ABS 官方 Shapefile 转 GeoJSON（体积更大）。参考：ABS 数字边界下载页。 
+let rules = null, counts = null;
 
-// 用于给“找到工作”生成多站点搜索按钮
-const JOB_SITES = [
-  { name:'SEEK', domains:['seek.com.au'] },
-  { name:'Indeed', domains:['au.indeed.com','indeed.com'] },
-  { name:'Workforce Australia', domains:['workforceaustralia.gov.au','jobsearch.gov.au'] },
-  { name:'Backpacker Job Board', domains:['backpackerjobboard.com.au'] },
-  { name:'Jora', domains:['jora.com','au.jora.com'] },
-  { name:'Adzuna', domains:['adzuna.com.au'] },
-  { name:'CareerOne', domains:['careerone.com.au'] }
-];
-
-// 颜色：行业越多颜色越深
-function colourByCount(n){
-  // 1 -> 78% 亮度；5 -> 54%
-  const light = Math.max(54, 90 - (n-1)*12);
-  return `hsl(140,60%,${light}%)`;
-}
-
-// 不可集签样式（灰+红虚线描边）
-const STYLE_INELIG = { fillColor:'#f2f3f5', color:'#ff4d4f', weight:1, dashArray:'4 2', fillOpacity:0.45 };
-// 可集签样式（按行业数量着色）
-function styleEligible(n){ return { fillColor: colourByCount(n), color:'#666', weight:.6, fillOpacity:.6 }; }
-
-// 获取要素中的邮编字段（兼容不同数据集）
 function getPostcode(props){
   const keys = ['postcode','POA_CODE21','POA_CODE','poa_code','code','id','name'];
   for (const k of keys){
-    const v = props[k];
-    if(!v) continue;
+    const v = props[k]; if(!v) continue;
     const m = String(v).match(/\b(\d{4})\b/);
     if (m) return m[1];
   }
   return null;
 }
 
-let map, layerPOA, selectedPC=null;
-
-function buildJobLinks(pc, extraKeyword=''){
-  const wrap = document.getElementById('jobBtns');
-  wrap.innerHTML = '';
-  const kw = extraKeyword ? (extraKeyword+' ') : '';
-  JOB_SITES.forEach(site=>{
-    const q = `${kw}${pc} site:${site.domains.join(' OR site:')}`;
-    const url = 'https://www.google.com/search?q='+encodeURIComponent(q)+'&as_qdr=d10';
-    const a = document.createElement('a');
-    a.className='btn'; a.href=url; a.target='_blank'; a.rel='noopener';
-    a.textContent = site.name;
-    wrap.appendChild(a);
-  });
+// 简化版：按规则判断某邮编是否可集签 & 显示行业标签
+function industriesFor(pc){
+  if(!rules) return [];
+  const st = rules.stateByPc[pc] || null;
+  const ret = [];
+  const isRemote = rules.remote.includes(pc) || rules.northern.includes(pc);
+  if(isRemote) ret.push('旅游和酒店业');
+  const regOK = rules.regionalAllStates.includes(st) || (rules.regionalByState[st]||[]).some(r=>pc>=r[0] && pc<=r[1]);
+  if(regOK) ret.push('植畜与动物种植','渔业和珍珠养殖','树木种植与伐木','矿业','建筑业');
+  return [...new Set(ret)];
 }
 
-function init(){
-  map = L.map('map',{preferCanvas:true}).setView([-25.2744,133.7751], 4);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    maxZoom: 12, attribution: '&copy; OpenStreetMap contributors'
+function buildWFLink(pc){
+  // 官方说明：可用“关键词/位置（邮编或城镇）”搜索。这里用邮编直搜，交给用户在站内再选“Past 2 weeks/Date posted”等筛选。:contentReference[oaicite:5]{index=5}
+  return `https://www.workforceaustralia.gov.au/individuals/jobs/search?searchText=${encodeURIComponent(pc)}`;
+}
+
+async function init(){
+  const map = L.map('map',{preferCanvas:true}).setView([-25.27,133.77], 4);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:12,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+
+  // 首府提示层
+  const caps=[['Sydney',-33.8688,151.2093],['Melbourne',-37.8136,144.9631],['Brisbane',-27.4698,153.0251],['Perth',-31.9523,115.8613],['Adelaide',-34.9285,138.6007],['Hobart',-42.8821,147.3272],['Darwin',-12.4634,130.8456],['Canberra',-35.2809,149.1300]];
+  const capLayer=L.layerGroup(caps.map(x=>L.marker([x[1],x[2]],{interactive:false}).bindTooltip(`⚠️ ${x[0]}（首府，多为不可计入）`,{permanent:true,direction:'right',offset:[8,0]}))).addTo(map);
+  document.getElementById('toggleCapitals').onchange=e=>{ if(e.target.checked) capLayer.addTo(map); else map.removeLayer(capLayer); };
+
+  // 载入规则与岗位计数
+  [rules, counts] = await Promise.all([
+    fetch('rules/eligibility.json').then(r=>r.json()),
+    fetch('data/jobs-last10d.json').then(r=>r.json()).catch(()=>({generatedAt:null,countsByPostcode:{}}))
+  ]);
+
+  // 载入 POA
+  const layer = L.geoJSON(await fetch(POA_GEOJSON_URL).then(r=>r.json()), {
+    style: f=>{
+      const pc=getPostcode(f.properties);
+      const inds=pc?industriesFor(pc):[];
+      if(!inds.length) return STYLE_INELIG;
+      const n = (counts.countsByPostcode||{})[pc]||0;
+      return { fillColor: blueRamp(n), color:'#666', weight:.6, fillOpacity:.65 };
+    },
+    onEachFeature: (f, poly)=>{
+      const pc=getPostcode(f.properties);
+      const inds=pc?industriesFor(pc):[];
+      const n=(counts.countsByPostcode||{})[pc]||0;
+      poly.on('mouseover', e=>{
+        poly.setStyle({weight:1.2});
+        const html=`
+          <div style="font-weight:600;margin-bottom:4px;">邮编 ${pc||'未知'}</div>
+          <div>${inds.length? '可集签行业：'+inds.map(i=>`<span class="pill">${i}</span>`).join(' ') : '<span style="color:#c0392b">不可集签区域</span>'}</div>
+          <div style="margin-top:6px;">近10天岗位数：<b>${n}</b></div>`;
+        poly.bindTooltip(html,{sticky:true,opacity:.96,direction:'top',offset:[0,-4]}).openTooltip(e.latlng);
+      });
+      poly.on('mouseout', ()=>poly.setStyle({weight:.6}));
+      poly.on('click', ()=>{
+        const box=document.getElementById('jobs'); box.style.display='block';
+        document.getElementById('jobsTitle').innerHTML=`邮编 <b>${pc}</b>`;
+        document.getElementById('jobsMeta').innerHTML = `${inds.length? '可集签行业：'+inds.map(i=>`<span class="pill">${i}</span>`).join(' ') : '<span style="color:#c0392b">不可集签区域</span>'} · 近10天岗位：<b>${n}</b>`;
+        document.getElementById('wfLink').href=buildWFLink(pc);
+        poly.bringToFront();
+      });
+    }
   }).addTo(map);
 
-  // 高亮首府（提示多为不可计入）
-  const capitals=[
-    {n:'Sydney',c:[-33.8688,151.2093]},{n:'Melbourne',c:[-37.8136,144.9631]},{n:'Brisbane',c:[-27.4698,153.0251]},
-    {n:'Perth',c:[-31.9523,115.8613]},{n:'Adelaide',c:[-34.9285,138.6007]},{n:'Hobart',c:[-42.8821,147.3272]},
-    {n:'Darwin',c:[-12.4634,130.8456]},{n:'Canberra',c:[-35.2809,149.1300]}
-  ];
-  const capitalMarkers = capitals.map(x=>{
-    return L.marker(x.c,{interactive:false}).bindTooltip(`⚠️ ${x.n}（首府，多为不可计入）`,{
-      permanent:true, direction:'right', offset:[8,0], className:'cap'
+  // “只看可集签”
+  document.getElementById('toggleEligibleOnly').onchange=e=>{
+    const only=e.target.checked;
+    layer.setStyle(f=>{
+      const pc=getPostcode(f.properties);
+      const inds=pc?industriesFor(pc):[];
+      if(only && !inds.length) return {opacity:0,fillOpacity:0};
+      if(!inds.length) return STYLE_INELIG;
+      const n=(counts.countsByPostcode||{})[pc]||0;
+      return { fillColor:blueRamp(n), color:'#666', weight:.6, fillOpacity:.65 };
     });
-  });
-  const capitalLayer = L.layerGroup(capitalMarkers).addTo(map);
-  const toggleCapitals = document.getElementById('toggleCapitals');
-  toggleCapitals.addEventListener('change',()=>{ if(toggleCapitals.checked){capitalLayer.addTo(map)}else{map.removeLayer(capitalLayer)}});
-
-  // 载入 POA 多边形（邮编边界）
-  fetch(POA_GEOJSON_URL).then(r=>r.json()).then(geo=>{
-    layerPOA = L.geoJSON(geo, {
-      style: f=>{
-        const pc = getPostcode(f.properties);
-        const inds = pc ? industriesFor(pc) : [];
-        return inds.length ? styleEligible(inds.length) : STYLE_INELIG;
-      },
-      onEachFeature: (f,layer)=>{
-        const pc = getPostcode(f.properties);
-        const inds = pc ? industriesFor(pc) : [];
-        // 悬停高亮
-        layer.on('mouseover', e=>{
-          layer.setStyle({weight:1.2});
-          const center = e.latlng;
-          const content = `
-            <div style="font-weight:600;margin-bottom:4px;">邮编 ${pc||'未知'}</div>
-            <div>${inds.length? '可集签行业：' + inds.map(i=>`<span class="pill">${i}</span>`).join(' ') : '<span style="color:#c0392b">不可集签区域</span>'}</div>
-          `;
-          layer.bindTooltip(content,{sticky:true,opacity:.95,direction:'top',offset:[0,-4]}).openTooltip(center);
-        });
-        layer.on('mouseout', ()=> layer.setStyle({weight: inds.length? .6 : 1}));
-        // 点击固定 + 右侧“找到工作”
-        layer.on('click', e=>{
-          selectedPC = pc;
-          document.getElementById('jobs').style.display='block';
-          document.getElementById('jobsTitle').innerHTML =
-            `<div style="margin-bottom:6px;">邮编 <b>${pc||'未知'}</b></div>
-             <div>${inds.length? '可集签行业：' + inds.map(i=>`<span class="pill">${i}</span>`).join(' ') : '<span style="color:#c0392b">不可集签区域</span>'}</div>
-             <div style="margin-top:6px;">关键词（可选）：<input id="kw" placeholder="例如: farm / mining / construction" style="width:60%"/></div>`;
-          buildJobLinks(pc);
-          setTimeout(()=>{ const kwInput=document.getElementById('kw'); if(!kwInput) return;
-            kwInput.onchange = ()=> buildJobLinks(pc, kwInput.value.trim());
-          },0);
-          e.target.bringToFront();
-        });
-      }
-    }).addTo(map);
-
-    // “只看可集签”过滤
-    document.getElementById('toggleEligibleOnly').addEventListener('change', (ev)=>{
-      const only = ev.target.checked;
-      layerPOA.setStyle(f=>{
-        const pc=getPostcode(f.properties); const inds=pc?industriesFor(pc):[];
-        if (only && !inds.length){ return {opacity:0,fillOpacity:0} } // 隐藏不可集签
-        return inds.length ? styleEligible(inds.length) : STYLE_INELIG;
-      });
-    });
-  }).catch(err=>{
-    alert('邮编边界数据加载失败，请刷新重试或稍后再试。');
-    console.error(err);
-  });
+  };
 }
 document.addEventListener('DOMContentLoaded', init);
 </script>
