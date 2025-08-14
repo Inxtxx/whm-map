@@ -1,0 +1,11 @@
+{
+  "name": "whm-map",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "playwright": "^1.46.0"
+  },
+  "scripts": {
+    "fetch": "node scripts/fetch_counts.mjs"
+  }
+}
