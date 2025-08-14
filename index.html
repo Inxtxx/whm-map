@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>澳大利亚打工度假集签地图（单文件版）</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    html, body { height: 100%; margin: 0; font-family: -apple-system, BlinkMacSystemFont,"Segoe UI",Roboto,Arial,"PingFang SC","Microsoft YaHei",sans-serif; }
+    #map { width: 100%; height: 100%; }
+    .info-box { position:absolute; z-index:1000; background:rgba(255,255,255,.95); padding:10px; border-radius:6px; box-shadow:0 2px 10px rgba(0,0,0,.2); max-width:320px; }
+    .info-box h2 { margin:0 0 6px; font-size:16px; }
+    .info-box ul { margin:0 0 8px 16px; padding:0; }
+    .btn { display:inline-block; background:#1976d2; color:#fff!important; text-decoration:none; padding:6px 10px; border-radius:4px; font-size:14px; }
+    .btn:hover { background:#0d47a1; }
+    .legend { background:#fff; padding:10px; line-height:1.5; border-radius:6px; font-size:13px; box-shadow:0 1px 6px rgba(0,0,0,.2); }
+    .legend div { display:flex; align-items:center; }
+    .legend .color { width:16px; height:16px; margin-right:8px; display:inline-block; border-radius:3px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="info" class="info-box" style="display:none;"></div>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+  function expandRange(rangeStr){rangeStr=rangeStr.trim();if(!rangeStr)return[];if(rangeStr.includes('-')){const[s,e]=rangeStr.split('-').map(x=>parseInt(x,10));const a=[];for(let i=s;i<=e;i++)a.push(i.toString().padStart(4,'0'));return a}return[rangeStr.padStart(4,'0')]}
+  function expandRanges(list){const out=[];(list||[]).forEach(r=>out.push(...expandRange(r)));return out}
+  const INDUSTRIES_REMOTE=['旅游和酒店业'];
+  const INDUSTRIES_REGIONAL=['植畜与动物种植','渔业和珍珠养殖','树木种植与伐木','矿业','建筑业'];
+
+  const eligibleDefinitions={
+    remote:{ NSW:['2356','2386','2387','2396','2405','2406','2672','2675','2825','2826','2829','2832-2836','2838-2840','2873','2878','2879','2898','2899'],
+             NT:['*'],
+             QLD:['4025','4183','4417-4420','4422','4423','4426-4428','4454','4461','4462','4465','4467','4468','4470','4474','4475','4477-4482','4486-4494','4496','4497','4680','4694','4695','4697','4699-4707','4709-4714','4717','4720-4728','4730-4733','4735-4746','4750','4751','4753','4754','4756','4757','4798-4812','4814-4825','4828-4830','4849','4850','4852','4854-4856','4858-4861','4865','4868-4888','4890-4892','4895'],
+             VIC:['3424','3506','3509','3512','3889-3892'],
+             SA:['5220-5223','5302-5304','5440','5576','5577','5582','5583','5602-5607','5611','5630-5633','5640-5642','5650-5655','5660','5661','5670','5671','5680','5690','5713','5715','5717','5719','5720','5722-5725','5730-5734'],
+             TAS:['7139','7255-7257','7466-7470'],
+             WA:['6161','6335-6338','6341','6343','6346','6348','6350-6353','6355-6359','6361','6363','6365','6367-6369','6373','6375','6385','6386','6418-6429','6431','6434','6436-6438','6440','6443','6445-6448','6450','6452','6466-6468','6470','6472','6473','6475-6477','6479','6480','6484','6487-6490','6515','6517-6519','6536','6605','6606','6608','6609','6612-6614','6616','6620','6623','6625','6627','6628','6630-6632','6635','6638-6640','6731','6733','6798','6799']},
+    remoteAdditional:{QLD:['4406','4416','4498'],TAS:['7215']},
+    northern:{ NT:['*'],
+               QLD:['4472','4478','4481','4482','4680','4694','4695','4697','4699-4707','4709-4714','4717','4720-4728','4730-4733','4735-4746','4750','4751','4753','4754','4756','4757','4798-4812','4814-4825','4828-4830','4849','4850','4852','4854-4856','4858-4861','4865','4868-4888','4890-4892','4895'],
+               WA:['0872','6537','6642','6646','6701','6705','6707','6710-6714','6716','6718','6720-6722','6725','6726','6728','6740','6743','6751','6753','6754','6758','6760','6762','6765','6770']},
+    regional:{ NSW:['2311-2312','2328-2411','2420-2490','2536-2551','2575-2594','2618-2739','2787-2898'],
+               VIC:['3139','3211-3334','3340-3424','3430-3649','3658-3749','3753','3756','3758','3762','3764','3778-3781','3783','3797','3799','3810-3909','3921-3925','3945-3974','3979','3981-3996'],
+               QLD:['4124-4125','4133','4211','4270-4272','4275','4280','4285','4287','4307-4499','4510','4512','4515-4519','4522-4899'],
+               SA:['*'],TAS:['*'],WA:['6041-6044','6055-6056','6069','6076','6083-6084','6111','6121-6126','6200-6799'],NT:['*'],Norfolk:['*']}
+  };
+
+  function getColour(n){return `hsl(140,60%,${90-(n-1)*12}%)`}
+
+  function buildEligiblePostcodes(){
+    const m=new Map();
+    for(const s in eligibleDefinitions.remote){const r=eligibleDefinitions.remote[s];if(r.includes('*'))continue;expandRanges(r).forEach(pc=>m.set(pc,INDUSTRIES_REMOTE))}
+    for(const s in eligibleDefinitions.remoteAdditional){expandRanges(eligibleDefinitions.remoteAdditional[s]).forEach(pc=>m.set(pc,INDUSTRIES_REMOTE))}
+    for(const s in eligibleDefinitions.northern){const r=eligibleDefinitions.northern[s];if(r.includes('*'))continue;expandRanges(r).forEach(pc=>m.set(pc,INDUSTRIES_REMOTE))}
+    for(const s in eligibleDefinitions.regional){const r=eligibleDefinitions.regional[s];if(r.includes('*'))continue;expandRanges(r).forEach(pc=>{if(!m.has(pc))m.set(pc,INDUSTRIES_REGIONAL)})}
+    return m;
+  }
+
+  async function init(){
+    const map=L.map('map').setView([-25.2744,133.7751],4);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:13,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+    const info=document.getElementById('info');
+    function showInfo(latlng,pc,inds){
+      info.style.display='block';
+      info.style.left=(latlng.containerPoint.x+12)+'px';
+      info.style.top=(latlng.containerPoint.y+12)+'px';
+      info.innerHTML=`<h2>邮编 ${pc}</h2><div>可集签的行业：</div><ul>${inds.map(i=>`<li>${i}</li>`).join('')}</ul>`;
+      const q=`jobs ${pc} site:seek.com.au OR site:indeed.com.au`;
+      const url='https://www.google.com/search?q='+encodeURIComponent(q)+'&as_qdr=d10';
+      info.innerHTML+=`<a class="btn" href="${url}" target="_blank" rel="noopener">找到工作</a>`;
+    }
+    map.on('click',()=>info.style.display='none');
+
+    const legend=L.control({position:'bottomleft'});
+    legend.onAdd=function(){
+      const div=L.DomUtil.create('div','legend');
+      div.innerHTML='<strong>行业数量标识</strong><br/>';
+      for(let i=1;i<=INDUSTRIES_REGIONAL.length;i++){const c=getColour(i);div.innerHTML+=`<div><span class="color" style="background:${c}"></span>${i} 个行业</div>`}
+      div.innerHTML+='<div style="margin-top:6px;font-size:12px;color:#555;">注：部分州/领地在 regional 类别为全州有效（“*”），为避免过密，本图仅绘制明确列出的邮编。</div>';
+      return div;
+    };
+    legend.addTo(map);
+
+    const eligible=buildEligiblePostcodes();
+    const csv='https://raw.githubusercontent.com/Elkfox/Australian-Postcode-Data/master/au_postcodes.csv';
+    try{
+      const resp=await fetch(csv); const text=await resp.text();
+      const parsed=Papa.parse(text,{header:true,skipEmptyLines:true});
+      const coords=new Map();
+      parsed.data.forEach(row=>{
+        const pc=String(row.postcode||'').trim().padStart(4,'0');
+        if(!pc||coords.has(pc))return;
+        const lat=parseFloat(row.latitude),lon=parseFloat(row.longitude);
+        if(!Number.isNaN(lat)&&!Number.isNaN(lon))coords.set(pc,{lat,lon});
+      });
+      const group=L.layerGroup().addTo(map);
+      eligible.forEach((inds,pc)=>{
+        const c=coords.get(pc); if(!c)return;
+        const n=inds.length, color=getColour(n);
+        const marker=L.circleMarker([c.lat,c.lon],{radius:5+n*2,fillColor:color,color,weight:1,fillOpacity:.85});
+        marker.on('mouseover',e=>showInfo(e,pc,inds));
+        group.addLayer(marker);
+      });
+    }catch(e){console.error(e); alert('加载邮编数据失败，请稍后重试');}
+  }
+  document.addEventListener('DOMContentLoaded',init);
+  </script>
+</body>
+</html>
