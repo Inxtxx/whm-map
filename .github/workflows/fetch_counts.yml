@@ -1,0 +1,29 @@
+name: Fetch official job counts (10 days)
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 18 * * *'   # 每天 02:00 AWST = 18:00 UTC 前后（按你需要改）
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # 允许提交回仓库
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Install Playwright
+        run: |
+          npm ci || npm i playwright@1
+          npx playwright install --with-deps chromium
+      - name: Fetch counts (official site only)
+        run: node scripts/fetch_counts.mjs
+      - name: Commit data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/jobs-last10d.json
+          git commit -m "chore(data): update jobs-last10d.json [skip ci]" || echo "No changes"
+          git push
